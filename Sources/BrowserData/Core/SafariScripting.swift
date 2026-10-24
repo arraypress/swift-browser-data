@@ -5,7 +5,7 @@
 //  Created by David Sherlock on 2026.
 //
 //  What Safari has open, asked through its own scripting dictionary (the
-//  `tab` class: `URL`, `name`, `text`; a window's `current tab`). Each ask
+//  `tab` class: `URL`, `name`, `text`, `source`; a window's `current tab`). Each ask
 //  runs /usr/bin/osascript; macOS asks the person once whether the host
 //  (the terminal, the agent) may control Safari — refused is -1743.
 //
@@ -35,7 +35,13 @@ public struct SafariScripting: Sendable {
 
     /// A tab's visible text: `window` 1 is the frontmost; no `tab` means the one it shows.
     public func page(window: Int = 1, tab: Int? = nil) throws(BrowserDataError) -> PageText {
-        try ScriptOutput.page(try run(ScriptOutput.pageScript, [String(window), String(tab ?? 0)]))
+        try ScriptOutput.page(try run(ScriptOutput.pageScript, [String(window), String(tab ?? 0), "text"]))
+    }
+
+    /// A tab's HTML as Safari holds it — signed-in pages included — for a
+    /// reader to pull the article out of. `PageText.text` carries the HTML.
+    public func source(window: Int = 1, tab: Int? = nil) throws(BrowserDataError) -> PageText {
+        try ScriptOutput.page(try run(ScriptOutput.pageScript, [String(window), String(tab ?? 0), "source"]))
     }
 
     /// The real runner: /usr/bin/osascript, its output and errors in files
@@ -108,7 +114,8 @@ enum ScriptOutput {
         end tell
         """
 
-    /// One record: URL, name, text. Arguments: window, tab (0 = the one it shows).
+    /// One record: URL, name, and the text or the HTML. Arguments: window,
+    /// tab (0 = the one it shows), `text` or `source`.
     static let pageScript = """
         on run argv
             \(prelude.replacingOccurrences(of: "\n", with: "\n    "))
@@ -126,7 +133,11 @@ enum ScriptOutput {
                 if u is missing value then set u to ""
                 set n to name of t
                 if n is missing value then set n to ""
-                set x to text of t
+                if (item 3 of argv) is "source" then
+                    set x to source of t
+                else
+                    set x to text of t
+                end if
                 if x is missing value then set x to ""
                 return u & us & n & us & x
             end tell

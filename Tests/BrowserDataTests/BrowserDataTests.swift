@@ -305,6 +305,20 @@ struct ScriptingTests {
         #expect(page.text == "line one\nline\(f)two")
     }
 
+    @Test func textAndSourceAskForWhatTheySay() throws {
+        let asked = Asked()
+        let scripting = SafariScripting { _, arguments throws(BrowserDataError) in
+            asked.arguments.append(arguments)
+            return "https://a.example/\u{1F}T\u{1F}<p>hi</p>"
+        }
+        _ = try scripting.page(window: 2, tab: 3)
+        let html = try scripting.source()
+        #expect(asked.arguments == [["2", "3", "text"], ["1", "0", "source"]])
+        #expect(html.text == "<p>hi</p>")
+    }
+
+    final class Asked: @unchecked Sendable { var arguments: [[String]] = [] }
+
     @Test func errorsAreClassified() {
         #expect(ScriptOutput.error(from: "0:12: execution error: Not authorized to send Apple events to Safari. (-1743)\n") == .needsAutomation)
         #expect(ScriptOutput.error(from: "execution error: Safari got an error: Application isn’t running. (-600)") == .notRunning)

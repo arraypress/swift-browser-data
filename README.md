@@ -33,7 +33,7 @@ All behind **Full Disk Access**.
 
 ## Open tabs
 
-`SafariScripting` runs `/usr/bin/osascript` against Safari's dictionary (`tab`: `URL`, `name`, `text`). It never launches Safari: the script asks `is running` first, which sends Safari nothing. The first ask makes macOS show the Automation prompt for the host (Terminal, an agent); refusal is `needsAutomation`. Whether a private window's tabs are listed is not yet measured.
+`SafariScripting` runs `/usr/bin/osascript` against Safari's dictionary (`tab`: `URL`, `name`, `text`, `source`): `tabs()`, `page()` for a tab's visible text, and `source()` for its HTML as Safari holds it — signed-in pages included — for a reader such as Readability to pull the article from. It never launches Safari: the script asks `is running` first, which sends Safari nothing. The first ask makes macOS show the Automation prompt for the host (Terminal, an agent); refusal is `needsAutomation`. Whether a private window's tabs are listed is not yet measured.
 
 ## Privacy helpers
 
