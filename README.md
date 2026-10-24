@@ -39,7 +39,7 @@ All behind **Full Disk Access**.
 
 - `URLPrivacy.trimmed` drops the query string, fragment and user:password — except the parameters that name the page itself on sites where nothing else does (YouTube's `v` and `list`, Hacker News's `id`).
 - `SiteList` — sites never to show, each with its subdomains (`bank.example` hides `online.bank.example`, not `notbank.example`).
-- `BrowserQueries` — search (every word must start a word; case and accents ignored) and visits per site.
+- `BrowserQueries` — search (every word must start a word; case and accents ignored), visits per site, and `collapsed`: Safari records three to six visits for one look at a page (reloads, in-site redirects, the title arriving late); back-to-back repeats within 5 minutes become one.
 
 ## Writing
 

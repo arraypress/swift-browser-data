@@ -32,6 +32,28 @@ public enum BrowserQueries {
             .sorted { ($0.visits, $0.lastVisit) > ($1.visits, $1.lastVisit) }
     }
 
+    /// Visits (newest first) with back-to-back repeats of one page merged:
+    /// Safari records several visits for one look at a page — a reload, a
+    /// redirect within the site, the title arriving later (measured: three
+    /// to six rows a search, some untitled). A run of visits with the same
+    /// `key`, each within `window` of the next, becomes its newest visit,
+    /// with the run's first title when that visit has none.
+    public static func collapsed(_ visits: [HistoryVisit], within window: TimeInterval = 300,
+                                 key: (HistoryVisit) -> String = \.url) -> [HistoryVisit] {
+        var result: [HistoryVisit] = []
+        var last: (key: String, date: Date)?
+        for visit in visits {
+            let visitKey = key(visit)
+            if let previous = last, previous.key == visitKey, previous.date.timeIntervalSince(visit.date) <= window, !result.isEmpty {
+                if result[result.count - 1].title == nil { result[result.count - 1].title = visit.title }
+            } else {
+                result.append(visit)
+            }
+            last = (visitKey, visit.date)
+        }
+        return result
+    }
+
     /// Whether every word of `query` starts a word somewhere in `fields`
     /// (ignoring case and accents). `rust guide` finds "A Guide to Rust".
     public static func matches(_ query: String, _ fields: [String?]) -> Bool {

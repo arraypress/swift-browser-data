@@ -247,6 +247,24 @@ struct PrivacyTests {
         #expect(!BrowserQueries.matches("rust python", ["A Guide to Rust"]))
     }
 
+    @Test func repeatsCollapseIntoOneVisit() {
+        let t = Date(timeIntervalSince1970: 1_760_000_000)
+        func v(_ url: String, _ title: String?, _ minutes: Double) -> HistoryVisit {
+            HistoryVisit(url: url, title: title, date: t.addingTimeInterval(-minutes * 60), visitCount: 1, origin: 0)
+        }
+        let visits = [v("https://s.example/?q=a&x=1", nil, 0), v("https://s.example/?q=a", "a - Search", 1), v("https://s.example/?q=a", nil, 2),
+                      v("https://news.example/", "News", 3),
+                      v("https://s.example/?q=b", "b - Search", 4),
+                      v("https://news.example/", "News", 30), v("https://news.example/", "News", 40)]
+        let byURL = BrowserQueries.collapsed(visits)
+        #expect(byURL.map(\.title) == [nil, "a - Search", "News", "b - Search", "News", "News"])
+        let trimmed = BrowserQueries.collapsed(visits) { URLPrivacy.trimmed($0.url) }
+        #expect(trimmed.map(\.title) == ["a - Search", "News", "b - Search", "News", "News"])
+        #expect(trimmed[0].date == t && trimmed[0].url == "https://s.example/?q=a&x=1")
+        #expect(BrowserQueries.collapsed(visits, within: 20 * 60) { URLPrivacy.trimmed($0.url) }.count == 4)
+        #expect(BrowserQueries.collapsed([]).isEmpty)
+    }
+
     @Test func sitesCountVisits() {
         let date = Date(timeIntervalSince1970: 1_760_000_000)
         let visits = [
