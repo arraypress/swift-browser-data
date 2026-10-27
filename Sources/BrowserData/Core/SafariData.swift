@@ -57,9 +57,9 @@ public struct SafariData: Sendable {
             WHERE \(conditions.joined(separator: " AND "))
             ORDER BY v.visit_time DESC
             """, values) { row in
-            guard let url = row.text(0), let time = row.double(2) else { return }
-            visits.append(HistoryVisit(url: url, title: row.text(1), date: Date(timeIntervalSinceReferenceDate: time),
-                                       visitCount: row.integer(3) ?? 0, origin: row.integer(4) ?? 0))
+            guard let url = row[0].nonEmptyString, let time = row[2].double else { return }
+            visits.append(HistoryVisit(url: url, title: row[1].nonEmptyString, date: Date(timeIntervalSinceReferenceDate: time),
+                                       visitCount: row[3].truncatedInt ?? 0, origin: row[4].truncatedInt ?? 0))
         }
         return visits
     }
@@ -83,10 +83,10 @@ public struct SafariData: Sendable {
             SELECT coalesce(d.device_name, ''), t.url, t.title, t.is_pinned, t.last_viewed_time, t.position
             FROM cloud_tabs t LEFT JOIN cloud_tab_devices d ON d.device_uuid = t.device_uuid
             """) { row in
-            guard let url = row.text(1) else { return }
-            let viewed = row.double(4).flatMap { $0 > 0 ? Date(timeIntervalSinceReferenceDate: $0) : nil }
-            tabs.append((CloudTab(device: row.text(0) ?? "", url: url, title: row.text(2), pinned: row.integer(3) == 1, lastViewed: viewed),
-                         SessionDecoding.sortValue(row.blob(5)) ?? .max))
+            guard let url = row[1].nonEmptyString else { return }
+            let viewed = row[4].double.flatMap { $0 > 0 ? Date(timeIntervalSinceReferenceDate: $0) : nil }
+            tabs.append((CloudTab(device: row[0].nonEmptyString ?? "", url: url, title: row[2].nonEmptyString, pinned: row[3].truncatedInt == 1, lastViewed: viewed),
+                         SessionDecoding.sortValue(row[5].data) ?? .max))
         }
         return tabs.sorted { ($0.tab.device, $0.order) < ($1.tab.device, $1.order) }.map(\.tab)
     }
@@ -100,12 +100,12 @@ public struct SafariData: Sendable {
             WHERE type = 1 AND parent = 0 AND coalesce(deleted, 0) = 0 AND coalesce(hidden, 0) = 0 AND coalesce(title, '') != ''
             ORDER BY order_index, id
             """) { row in
-            if let id = row.integer(0), let title = row.text(1) { groups.append((id, title)) }
+            if let id = row[0].truncatedInt, let title = row[1].nonEmptyString { groups.append((id, title)) }
         }
         var open: Set<Int> = []
         if !database.columns(of: "windows_tab_groups").isEmpty {
             try database.read("SELECT tab_group_id FROM windows_tab_groups") { row in
-                if let id = row.integer(0) { open.insert(id) }
+                if let id = row[0].truncatedInt { open.insert(id) }
             }
         }
         var result: [TabGroup] = []
@@ -114,7 +114,7 @@ public struct SafariData: Sendable {
             try database.read("""
                 SELECT title, url FROM bookmarks WHERE parent = ? AND type = 0 AND coalesce(deleted, 0) = 0 ORDER BY order_index, id
                 """, [Double(group.id)]) { row in
-                tabs.append(GroupTab(title: row.text(0), url: row.text(1)))
+                tabs.append(GroupTab(title: row[0].nonEmptyString, url: row[1].nonEmptyString))
             }
             result.append(TabGroup(id: group.id, title: group.title, tabs: tabs, open: open.contains(group.id)))
         }
