@@ -5,7 +5,7 @@
 //  Created by David Sherlock on 2026.
 //
 //  Safari's saved data, read from its own files and never written. The
-//  databases are copied first (see DatabaseSnapshot); the plists are read
+//  databases are copied first (swift-sqlite-reader's snapshot); the plists are read
 //  whole. All of it sits behind Full Disk Access.
 //
 //  MEASURED on macOS 27.0.1 (Safari 27), from the schemas and key names
@@ -23,6 +23,7 @@
 //
 
 import Foundation
+import SQLiteReader
 
 /// Safari's history, bookmarks, Reading List, tabs and downloads, read-only.
 public struct SafariData: Sendable {
@@ -36,8 +37,8 @@ public struct SafariData: Sendable {
     /// Visits, newest first. A hop that redirected onward and a page that
     /// failed to load are left out: what is here is where the person landed.
     public func history(since: Date? = nil, until: Date? = nil) throws(BrowserDataError) -> [HistoryVisit] {
-        let snapshot = try DatabaseSnapshot(of: locations.history)
-        let columns = snapshot.database.columns(of: "history_visits")
+        let database = try SQLiteReader.snapshot(of: locations.history)
+        let columns = database.columns(of: "history_visits")
         guard columns.contains("VISIT_TIME") else { throw .unreadable(locations.history.path, reason: "no history_visits table") }
         var conditions = ["v.redirect_destination IS NULL", "v.load_successful = 1"]
         var values: [Double] = []
@@ -50,7 +51,7 @@ public struct SafariData: Sendable {
             values.append(until.timeIntervalSinceReferenceDate)
         }
         var visits: [HistoryVisit] = []
-        try snapshot.database.query("""
+        try database.read("""
             SELECT i.url, v.title, v.visit_time, i.visit_count, v.origin
             FROM history_visits v JOIN history_items i ON i.id = v.history_item
             WHERE \(conditions.joined(separator: " AND "))
@@ -76,9 +77,9 @@ public struct SafariData: Sendable {
 
     /// Tabs open on this account's other devices, device by device, in their order there.
     public func cloudTabs() throws(BrowserDataError) -> [CloudTab] {
-        let snapshot = try DatabaseSnapshot(of: locations.cloudTabs)
+        let database = try SQLiteReader.snapshot(of: locations.cloudTabs)
         var tabs: [(tab: CloudTab, order: Int)] = []
-        try snapshot.database.query("""
+        try database.read("""
             SELECT coalesce(d.device_name, ''), t.url, t.title, t.is_pinned, t.last_viewed_time, t.position
             FROM cloud_tabs t LEFT JOIN cloud_tab_devices d ON d.device_uuid = t.device_uuid
             """) { row in
@@ -92,10 +93,9 @@ public struct SafariData: Sendable {
 
     /// The named tab groups, with their tabs.
     public func tabGroups() throws(BrowserDataError) -> [TabGroup] {
-        let snapshot = try DatabaseSnapshot(of: locations.tabGroups)
-        let database = snapshot.database
+        let database = try SQLiteReader.snapshot(of: locations.tabGroups)
         var groups: [(id: Int, title: String)] = []
-        try database.query("""
+        try database.read("""
             SELECT id, title FROM bookmarks
             WHERE type = 1 AND parent = 0 AND coalesce(deleted, 0) = 0 AND coalesce(hidden, 0) = 0 AND coalesce(title, '') != ''
             ORDER BY order_index, id
@@ -104,14 +104,14 @@ public struct SafariData: Sendable {
         }
         var open: Set<Int> = []
         if !database.columns(of: "windows_tab_groups").isEmpty {
-            try database.query("SELECT tab_group_id FROM windows_tab_groups") { row in
+            try database.read("SELECT tab_group_id FROM windows_tab_groups") { row in
                 if let id = row.integer(0) { open.insert(id) }
             }
         }
         var result: [TabGroup] = []
         for group in groups {
             var tabs: [GroupTab] = []
-            try database.query("""
+            try database.read("""
                 SELECT title, url FROM bookmarks WHERE parent = ? AND type = 0 AND coalesce(deleted, 0) = 0 ORDER BY order_index, id
                 """, [Double(group.id)]) { row in
                 tabs.append(GroupTab(title: row.text(0), url: row.text(1)))
@@ -134,7 +134,7 @@ public struct SafariData: Sendable {
     /// Whether each file can be read: for a doctor.
     public func access() -> [(name: String, url: URL, state: FileState)] {
         locations.all.map { file in
-            let state: FileState = switch PermissionCheck.access(file.url.path) {
+            let state: FileState = switch FileChecks.access(file.url.path) {
             case .readable: .readable
             case .missing: .missing
             case .refused: .refused
@@ -144,7 +144,7 @@ public struct SafariData: Sendable {
     }
 
     private func read(_ url: URL) throws(BrowserDataError) -> Data {
-        switch PermissionCheck.access(url.path) {
+        switch FileChecks.access(url.path) {
         case .readable: break
         case .missing: throw .missing(url.path)
         case .refused: throw .needsFullDiskAccess(url.path)
@@ -152,7 +152,7 @@ public struct SafariData: Sendable {
         do {
             return try Data(contentsOf: url)
         } catch {
-            if PermissionCheck.isRefusal(error) { throw .needsFullDiskAccess(url.path) }
+            if FileChecks.isRefusal(error) { throw .needsFullDiskAccess(url.path) }
             throw .unreadable(url.path, reason: error.localizedDescription)
         }
     }

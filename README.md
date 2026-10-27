@@ -47,7 +47,7 @@ None. Bookmarks, tab groups and the Reading List change only through Safari's ow
 
 ## Requirements
 
-macOS 14 or later. Swift 6.2. No dependencies.
+macOS 14 or later. Swift 6.2. One dependency: [swift-sqlite-reader](https://github.com/arraypress/swift-sqlite-reader), which copies each database and reads the copy.
 
 ## Licence
 
